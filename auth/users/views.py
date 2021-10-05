@@ -1,40 +1,43 @@
-from django.shortcuts import render
-from rest_framework import serializers
 from rest_framework.views import APIView
-
-from users.serializers import UserSerializer
-from rest_framework.exceptions import AuthenticationFailed
-
-from .serializers import UserSerializer
 from rest_framework.response import Response
+from rest_framework.exceptions import AuthenticationFailed
+from .serializers import UserSerializer
 from .models import Users
-
+import jwt, datetime
 # Create your views here.
 
 class RegisterView(APIView):
     def post(self, request):
-        serializer = UserSerializer(data= request.data)
+        serializer = UserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
 
 class LoginView(APIView):
-    def post(self,request):
+    def post(self, request):
         email = request.data['email']
         password = request.data['password']
-
 
         user = Users.objects.filter(email=email).first()
 
         if user is None:
-            raise AuthenticationFailed('Users not found !')
+            raise AuthenticationFailed('User not found!')
 
         if not user.check_password(password):
-            raise AuthenticationFailed("Incorrect Password")
+            raise AuthenticationFailed('Incorrect password!')
 
-        return Response(
-            {
-                'message': 'success'
-            }
-        )
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=60),
+            'iat': datetime.datetime.utcnow()
+        }
 
+        token = jwt.encode(payload, 'secret', algorithm='HS256').decode('utf-8')
+
+        response = Response()
+
+        response.set_cookie(key='jwt', value=token, httponly=True)
+        response.data = {
+            'jwt': token
+        }
+        return response
